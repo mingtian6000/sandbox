@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for User Service
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL for Verification Service
+  verification-db:
+    image: postgres:16-alpine
+    container_name: verification-db
+    environment:
+      POSTGRES_DB: verificationdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - verification-db-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # User Service
+  user-service:
+    build:
+      context: ../services
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: your-256-bit-secret-key-change-in-production
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+    ports:
+      - "8081:8081"
+    depends_on:
+      user-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/users/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Verification Service
+  verification-service:
+    build:
+      context: ../services
+      dockerfile: verification-service/Dockerfile
+    container_name: verification-service
+    environment:
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://verification-db:5432/verificationdb
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    ports:
+      - "8082:8082"
+    depends_on:
+      verification-db:
+        condition: service_healthy
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/verification/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  user-db-data:
+  verification-db-data:
+
+networks:
+  microservices-network:
+    driver: bridge
