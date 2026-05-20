@@ -1,0 +1,62 @@
+# Quarkus Application Configuration
+quarkus:
+  application:
+    name: fraud-detection
+    version: 1.0.0
+
+  http:
+    port: ${HTTP_PORT:8080}
+    read-timeout: 10s
+    idle-timeout: 30s
+    limits:
+      max-body-size: 100KB
+
+  # Reactive threading
+  vertx:
+    max-event-loop-execute-time: 2s
+    worker-pool-size: 20
+    event-loop-pool-size: 4
+
+  # Logging
+  log:
+    level: ${LOG_LEVEL:INFO}
+    min-level: DEBUG
+    category:
+      com.fraud.detection:
+        level: DEBUG
+
+  # Native compilation
+  native:
+    additional-build-args:
+      - --initialize-at-build-time=org.codehaus.janino
+      - --initialize-at-run-time=com.microsoft.onnxruntime
+      - --enable-all-security-services
+
+# Fraud detection thresholds
+fraud:
+  decision:
+    threshold-approve: 30
+    threshold-reject: 60
+  pipeline:
+    stage-timeout-ms: 500
+    max-parallel-stages: 3
+
+# Model path
+onnx:
+  model-path: ${ONNX_MODEL_PATH:/models/fraud_model.onnx}
+
+# Redis configuration
+redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  pool:
+    max-total: 32
+    max-idle: 8
+    min-idle: 2
+
+# Cassandra configuration
+cassandra:
+  host: ${CASSANDRA_HOST:localhost}
+  port: ${CASSANDRA_PORT:9042}
+  datacenter: datacenter1
+  keyspace: fraud_detection
