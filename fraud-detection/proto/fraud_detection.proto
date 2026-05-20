@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package fraud.pipeline;
+
+option java_package = "com.fraud.detection.proto";
+option java_multiple_files = true;
+
+// =============================================================
+// 1. Transaction — raw transaction inbound from payment systems
+// =============================================================
+message TransactionProto {
+  string transaction_id  = 1;
+  string account_id      = 2;
+  double amount          = 3;
+  string currency        = 4;
+  string merchant_id     = 5;
+  string channel         = 6;  // ONLINE / ATM / POS
+  string device_id       = 7;
+  string ip_address      = 8;
+  string geo_location    = 9;  // "lat,lng"
+  int64  timestamp       = 10;
+  map<string, string> metadata = 11;
+}
+
+// =============================================================
+// 2. Feature Vector — input to the ML model
+// =============================================================
+message FeatureVectorProto {
+  double amount_normalized      = 1;
+  int32  tx_count_24h           = 2;
+  double avg_amount_24h         = 3;
+  double geo_velocity           = 4;
+  double device_risk_score      = 5;
+  double ip_reputation          = 6;
+  double time_anomaly           = 7;
+  double amount_zscore          = 8;
+  int32  merchant_diversity     = 9;
+  double night_tx_ratio         = 10;
+  repeated double raw_features  = 11 [packed = true];
+}
+
+// =============================================================
+// 3. Aggregated Metrics — stored in Cassandra (30-90d)
+// =============================================================
+message AggregatedMetrics {
+  double tx_count_30d           = 1;
+  double tx_count_7d            = 2;
+  double total_amount_30d       = 3;
+  double avg_amount_30d         = 4;
+  double amount_p99             = 5;
+  double amount_p95             = 6;
+  double amount_p50             = 7;
+  double geo_velocity_30d       = 8;
+  double merchant_diversity_30d = 9;
+  double device_change_count_30d = 10;
+  double night_tx_ratio_30d     = 11;
+}
+
+// =============================================================
+// 4. Scanner Result — output from a single scanner module
+// =============================================================
+message ScannerResultProto {
+  string scanner_name   = 1;
+  double risk_score     = 2;  // 0.0 - 1.0
+  string risk_level     = 3;  // LOW / MEDIUM / HIGH
+  string reason_code    = 4;
+  string detail         = 5;
+}
+
+// =============================================================
+// 5. Rule Result — output from a single rule evaluation
+// =============================================================
+message RuleResultProto {
+  string rule_id       = 1;
+  string rule_name     = 2;
+  bool   is_triggered  = 3;
+  double rule_weight   = 4;
+  string expression    = 5;
+}
+
+// =============================================================
+// 6. Scoring Result — final output of the pipeline
+// =============================================================
+message ScoringResultProto {
+  string   transaction_id     = 1;
+  double   fraud_score        = 2;  // 0 - 100
+  string   decision           = 3;  // APPROVE / REJECT / PENDING
+  string   decision_reason    = 4;
+  double   model_score        = 5;
+  double   rules_score        = 6;
+  double   scanners_score     = 7;
+  repeated ScannerResultProto scanner_details = 8;
+  repeated RuleResultProto    rule_details    = 9;
+  int64    processing_time_ms = 10;
+  string   pipeline_version   = 11;
+}
+
+// =============================================================
+// 7. Batch Scoring Request / Response
+// =============================================================
+message BatchScoreRequest {
+  repeated TransactionProto transactions = 1;
+}
+
+message BatchScoreResponse {
+  repeated ScoringResultProto results = 1;
+}
