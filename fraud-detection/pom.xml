@@ -65,11 +65,24 @@
             <artifactId>quarkus-vertx</artifactId>
         </dependency>
 
+        <!-- Scheduler (every N seconds) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
+        </dependency>
+
         <!-- ONNX Runtime -->
         <dependency>
             <groupId>com.microsoft.onnxruntime</groupId>
             <artifactId>onnxruntime</artifactId>
             <version>${onnxruntime.version}</version>
+        </dependency>
+
+        <!-- Redis (Jedis) -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>${jedis.version}</version>
         </dependency>
 
         <!-- Janino (Dynamic Rules Engine) -->
