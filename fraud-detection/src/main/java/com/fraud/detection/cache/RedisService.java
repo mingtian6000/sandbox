@@ -145,6 +145,32 @@ public class RedisService {
         }
     }
 
+    /** 获取有活动数据的账户 ID 列表。 */
+    public Set<String> getActiveAccounts() {
+        if (useLocal) {
+            Set<String> all = new HashSet<>(recentStore.keySet());
+            all.addAll(featureStore.keySet());
+            return all;
+        }
+        try (var jedis = pool.getResource()) {
+            // Redis: scan keys matching "txn:recent:*"
+            Set<String> accounts = new HashSet<>();
+            String cursor = "0";
+            do {
+                var scanResult = jedis.scan(cursor,
+                    new redis.clients.jedis.params.ScanParams().match("txn:recent:*").count(1000));
+                for (String key : scanResult.getResult()) {
+                    accounts.add(key.replace("txn:recent:", ""));
+                }
+                cursor = scanResult.getCursor();
+            } while (!cursor.equals("0"));
+            return accounts;
+        } catch (Exception e) {
+            log.warn("getActiveAccounts failed: {}", e.getMessage());
+            return Set.of();
+        }
+    }
+
     /** 读设备关联账户数。 */
     public int getDeviceAccountCount(String deviceId) {
         if (useLocal || deviceId == null) return 0;
