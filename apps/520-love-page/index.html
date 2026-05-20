@@ -1,0 +1,456 @@
+     1|<!DOCTYPE html>
+     2|<html lang="zh-CN">
+     3|<head>
+     4|  <meta charset="UTF-8">
+     5|  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+     6|  <title>520 ❤️ 我爱你</title>
+     7|  <script>p5.disableFriendlyErrors = true;</script>
+     8|  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+     9|  <style>
+    10|    * { margin: 0; padding: 0; box-sizing: border-box; }
+    11|    html, body {
+    12|      width: 100%; height: 100%;
+    13|      overflow: hidden;
+    14|      background: #0a0015;
+    15|      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    16|    }
+    17|    canvas { display: block; }
+    18|    #message-overlay {
+    19|      position: fixed;
+    20|      bottom: 0;
+    21|      left: 0;
+    22|      right: 0;
+    23|      padding: 30px 25px 40px;
+    24|      background: linear-gradient(transparent, rgba(10,0,21,0.9) 30%);
+    25|      pointer-events: none;
+    26|      z-index: 10;
+    27|    }
+    28|    #love-text {
+    29|      color: rgba(255,200,220,0.95);
+    30|      font-size: 16px;
+    31|      line-height: 1.8;
+    32|      text-align: center;
+    33|      letter-spacing: 1px;
+    34|      text-shadow: 0 0 20px rgba(255,50,100,0.3);
+    35|      min-height: 60px;
+    36|    }
+    37|    #love-text .cursor {
+    38|      display: inline-block;
+    39|      width: 2px;
+    40|      height: 18px;
+    41|      background: #ff6b8a;
+    42|      animation: blink 0.8s step-end infinite;
+    43|      vertical-align: text-bottom;
+    44|      margin-left: 2px;
+    45|    }
+    46|    @keyframes blink {
+    47|      0%, 100% { opacity: 1; }
+    48|      50% { opacity: 0; }
+    49|    }
+    50|    #hint {
+    51|      position: fixed;
+    52|      top: 20px;
+    53|      left: 50%;
+    54|      transform: translateX(-50%);
+    55|      color: rgba(255,255,255,0.2);
+    56|      font-size: 12px;
+    57|      letter-spacing: 2px;
+    58|      z-index: 10;
+    59|      animation: fadeOut 6s ease-out forwards;
+    60|      pointer-events: none;
+    61|    }
+    62|    @keyframes fadeOut {
+    63|      0% { opacity: 0.4; }
+    64|      60% { opacity: 0.4; }
+    65|      100% { opacity: 0; }
+    66|    }
+    67|  </style>
+    68|</head>
+    69|<body>
+    70|  <div id="hint">💕 轻触屏幕 · 绽放爱心</div>
+    71|  <div id="message-overlay">
+    72|    <div id="love-text"></div>
+    73|  </div>
+    74|<script>
+    75|// ============================================================
+    76|//  CONFIGURATION
+    77|// ============================================================
+    78|const CONFIG = {
+    79|  heartCount: 120,
+    80|  sparkleCount: 80,
+    81|  starCount: 200,
+    82|  heartSpawnRate: 0.3,
+    83|  heartMaxSpeed: 2.5,
+    84|  burstCount: 40,
+    85|};
+    86|
+    87|// ============================================================
+    88|//  COLOR PALETTE  —  Warm romantic sunset tones
+    89|// ============================================================
+    90|const PALETTE = {
+    91|  bgTop:    [10, 0, 21],
+    92|  bgMid:    [40, 5, 35],
+    93|  bgBot:    [80, 15, 50],
+    94|  stars:    [255, 240, 220],
+    95|  hearts:   [
+    96|    [255, 80, 120],
+    97|    [255, 50, 90],
+    98|    [255, 120, 160],
+    99|    [255, 180, 200],
+   100|    [255, 60, 60],
+   101|    [255, 200, 150],
+   102|    [255, 100, 180],
+   103|  ],
+   104|  sparkles: [
+   105|    [255, 220, 200],
+   106|    [255, 180, 150],
+   107|    [255, 240, 230],
+   108|    [255, 200, 220],
+   109|  ],
+   110|};
+   111|
+   112|// ============================================================
+   113|//  GLOBAL STATE
+   114|// ============================================================
+   115|let hearts = [];
+   116|let sparkles = [];
+   117|let stars = [];
+   118|let burstParticles = [];
+   119|let loveMessage = '';
+   120|let displayText = '';
+   121|let typeIndex = 0;
+   122|let angleOffset = 0;
+   123|
+   124|const LOVE_MESSAGE =
+   125|  '520 —— 在这个被赋予爱意的日子里，\n' +
+   126|  '想把全世界的温柔都攒起来，\n' +
+   127|  '全部、全部都给你 💕\n\n' +
+   128|  '愿每一次心动，都是你。\n' +
+   129|  '愿每一个明天，都有你。';
+   130|
+   131|// ============================================================
+   132|//  SETUP
+   133|// ============================================================
+   134|function setup() {
+   135|  pixelDensity(1);
+   136|  let c = createCanvas(min(windowWidth, 480), windowHeight);
+   137|  colorMode(HSB, 360, 100, 100, 100);
+   138|
+   139|  for (let i = 0; i < CONFIG.starCount; i++) {
+   140|    stars.push({
+   141|      x: random(width),
+   142|      y: random(height),
+   143|      size: random(0.5, 2),
+   144|      twinkleSpeed: random(0.005, 0.03),
+   145|      twinkleOffset: random(TWO_PI),
+   146|      alpha: random(60, 200),
+   147|    });
+   148|  }
+   149|
+   150|  for (let i = 0; i < CONFIG.heartCount * 0.3; i++) {
+   151|    hearts.push(createHeart(random(width), height + random(50, 200)));
+   152|  }
+   153|
+   154|  for (let i = 0; i < CONFIG.sparkleCount; i++) {
+   155|    sparkles.push({
+   156|      x: random(width),
+   157|      y: random(height),
+   158|      size: random(1, 3),
+   159|      speed: random(0.1, 0.4),
+   160|      phase: random(TWO_PI),
+   161|      color: random(PALETTE.sparkles),
+   162|    });
+   163|  }
+   164|
+   165|  loveMessage = LOVE_MESSAGE;
+   166|  typeIndex = 0;
+   167|  displayText = '';
+   168|}
+   169|
+   170|// ============================================================
+   171|//  DRAW
+   172|// ============================================================
+   173|function draw() {
+   174|  drawBackground();
+   175|  drawStars();
+   176|  drawSparkles();
+   177|  updateAndDrawHearts();
+   178|  updateAndDrawBursts();
+   179|  drawBig520();
+   180|  updateTypewriter();
+   181|
+   182|  if (random() < CONFIG.heartSpawnRate) {
+   183|    hearts.push(createHeart(random(width), height + 10));
+   184|  }
+   185|
+   186|  angleOffset += 0.005;
+   187|}
+   188|
+   189|// ============================================================
+   190|//  BACKGROUND — Twilight gradient with warm glow at bottom
+   191|// ============================================================
+   192|function drawBackground() {
+   193|  noFill();
+   194|  for (let y = 0; y < height; y++) {
+   195|    let t = y / height;
+   196|    let r, g, b;
+   197|    if (t < 0.4) {
+   198|      let s = t / 0.4;
+   199|      r = lerp(PALETTE.bgTop[0], PALETTE.bgMid[0], s);
+   200|      g = lerp(PALETTE.bgTop[1], PALETTE.bgMid[1], s);
+   201|      b = lerp(PALETTE.bgTop[2], PALETTE.bgMid[2], s);
+   202|    } else {
+   203|      let s = (t - 0.4) / 0.6;
+   204|      r = lerp(PALETTE.bgMid[0], PALETTE.bgBot[0], s);
+   205|      g = lerp(PALETTE.bgMid[1], PALETTE.bgBot[1], s);
+   206|      b = lerp(PALETTE.bgMid[2], PALETTE.bgBot[2], s);
+   207|    }
+   208|    stroke(r, g, b, 255);
+   209|    line(0, y, width, y);
+   210|  }
+   211|
+   212|  // Warm glow at bottom
+   213|  for (let i = 0; i < 3; i++) {
+   214|    let cx = width / 2 + sin(angleOffset + i * 2) * 60;
+   215|    let cy = height - 100 + i * 50;
+   216|    let gradRadius = 250 + i * 30;
+   217|    for (let r = gradRadius; r > 0; r -= 3) {
+   218|      let alpha = map(r, 0, gradRadius, 8, 0);
+   219|      fill(255, 50 + i * 20, 80 + i * 30, alpha);
+   220|      noStroke();
+   221|      ellipse(cx, cy, r * 2);
+   222|    }
+   223|  }
+   224|}
+   225|
+   226|// ============================================================
+   227|//  STARS — Twinkling
+   228|// ============================================================
+   229|function drawStars() {
+   230|  for (let s of stars) {
+   231|    let twinkle = sin(frameCount * s.twinkleSpeed + s.twinkleOffset);
+   232|    let alpha = map(twinkle, -1, 1, s.alpha * 0.3, s.alpha);
+   233|    fill(PALETTE.stars[0], PALETTE.stars[1], PALETTE.stars[2], alpha);
+   234|    noStroke();
+   235|    circle(s.x, s.y, s.size * (1 + twinkle * 0.3));
+   236|  }
+   237|}
+   238|
+   239|// ============================================================
+   240|//  SPARKLES — Floating light motes
+   241|// ============================================================
+   242|function drawSparkles() {
+   243|  for (let s of sparkles) {
+   244|    let x = s.x + sin(frameCount * 0.02 + s.phase) * 15;
+   245|    let y = s.y + cos(frameCount * 0.015 + s.phase * 1.3) * 10;
+   246|    let alpha = map(sin(frameCount * 0.03 + s.phase), -1, 1, 30, 80);
+   247|    fill(s.color[0], s.color[1], s.color[2], alpha);
+   248|    noStroke();
+   249|    circle(x, y, s.size);
+   250|
+   251|    if (s.size > 2) {
+   252|      fill(s.color[0], s.color[1], s.color[2], alpha * 0.15);
+   253|      circle(x, y, s.size * 4);
+   254|    }
+   255|  }
+   256|}
+   257|
+   258|// ============================================================
+   259|//  HEART
+   260|// ============================================================
+   261|function createHeart(x, y) {
+   262|  let col = random(PALETTE.hearts);
+   263|  return {
+   264|    x: x || random(width),
+   265|    y: y || random(height),
+   266|    size: random(8, 28),
+   267|    speedY: random(-CONFIG.heartMaxSpeed, -0.3),
+   268|    speedX: random(-0.3, 0.3),
+   269|    wobbleAmp: random(1, 3),
+   270|    wobbleFreq: random(0.02, 0.05),
+   271|    wobblePhase: random(TWO_PI),
+   272|    alpha: random(120, 220),
+   273|    color: col,
+   274|    rotation: random(-0.15, 0.15),
+   275|    rotSpeed: random(-0.005, 0.005),
+   276|    pulsePhase: random(TWO_PI),
+   277|  };
+   278|}
+   279|
+   280|function drawHeart(x, y, size, col, alpha, rotation, pulse) {
+   281|  push();
+   282|  translate(x, y);
+   283|  rotate(rotation);
+   284|  let s = size * (1 + sin(pulse) * 0.08);
+   285|
+   286|  noStroke();
+   287|  fill(col[0], col[1], col[2], alpha);
+   288|
+   289|  // Heart shape via bezier curves
+   290|  beginShape();
+   291|  vertex(0, s * 0.25);
+   292|  bezierVertex(-s * 0.5, -s * 0.3, -s, 0, 0, s * 0.55);
+   293|  bezierVertex(s, 0, s * 0.5, -s * 0.3, 0, s * 0.25);
+   294|  endShape(CLOSE);
+   295|
+   296|  // Soft glow
+   297|  fill(col[0], col[1], col[2], alpha * 0.1);
+   298|  beginShape();
+   299|  vertex(0, s * 0.25);
+   300|  bezierVertex(-s * 0.6, -s * 0.4, -s * 1.2, 0, 0, s * 0.65);
+   301|  bezierVertex(s * 1.2, 0, s * 0.6, -s * 0.4, 0, s * 0.25);
+   302|  endShape(CLOSE);
+   303|
+   304|  pop();
+   305|}
+   306|
+   307|function updateAndDrawHearts() {
+   308|  for (let i = hearts.length - 1; i >= 0; i--) {
+   309|    let h = hearts[i];
+   310|    h.x += h.speedX + sin(frameCount * h.wobbleFreq + h.wobblePhase) * h.wobbleAmp * 0.3;
+   311|    h.y += h.speedY;
+   312|    h.speedY *= 0.998;
+   313|    h.rotation += h.rotSpeed;
+   314|
+   315|    drawHeart(h.x, h.y, h.size, h.color, h.alpha, h.rotation, frameCount * 0.05 + h.pulsePhase);
+   316|
+   317|    if (h.y + h.size < -50) {
+   318|      hearts.splice(i, 1);
+   319|    }
+   320|  }
+   321|}
+   322|
+   323|// ============================================================
+   324|//  BURST — Click to explode hearts
+   325|// ============================================================
+   326|function burstAt(x, y) {
+   327|  for (let i = 0; i < CONFIG.burstCount; i++) {
+   328|    let angle = random(TWO_PI);
+   329|    let speed = random(1, 8);
+   330|    burstParticles.push({
+   331|      x: x,
+   332|      y: y,
+   333|      vx: cos(angle) * speed,
+   334|      vy: sin(angle) * speed - 1,
+   335|      size: random(6, 22),
+   336|      color: random(PALETTE.hearts),
+   337|      alpha: 220,
+   338|      life: 1,
+   339|      decay: random(0.008, 0.025),
+   340|      rotation: random(-0.3, 0.3),
+   341|      rotSpeed: random(-0.03, 0.03),
+   342|      pulsePhase: random(TWO_PI),
+   343|    });
+   344|  }
+   345|}
+   346|
+   347|function updateAndDrawBursts() {
+   348|  for (let i = burstParticles.length - 1; i >= 0; i--) {
+   349|    let p = burstParticles[i];
+   350|    p.x += p.vx;
+   351|    p.y += p.vy;
+   352|    p.vy += 0.04;
+   353|    p.vx *= 0.99;
+   354|    p.life -= p.decay;
+   355|    p.rotation += p.rotSpeed;
+   356|    p.alpha = p.life * 220;
+   357|
+   358|    if (p.life <= 0) {
+   359|      burstParticles.splice(i, 1);
+   360|      continue;
+   361|    }
+   362|
+   363|    drawHeart(p.x, p.y, p.size * p.life, p.color, p.alpha, p.rotation, frameCount * 0.05 + p.pulsePhase);
+   364|  }
+   365|}
+   366|
+   367|// ============================================================
+   368|//  BIG "520" TEXT
+   369|// ============================================================
+   370|function drawBig520() {
+   371|  let cx = width / 2;
+   372|  let cy = height * 0.48;
+   373|
+   374|  // Outer glow layers
+   375|  noStroke();
+   376|  for (let g = 5; g >= 0; g--) {
+   377|    let alpha = map(g, 0, 5, 8, 1);
+   378|    fill(255, 50 + g * 15, 80 + g * 10, alpha);
+   379|    textAlign(CENTER, CENTER);
+   380|    textSize(72 + g * 6);
+   381|    textStyle(BOLD);
+   382|    text('520', cx + (g % 2 === 0 ? -1 : 1) * (g + 1), cy + (g % 2 === 0 ? 1 : -1) * (g + 1));
+   383|  }
+   384|
+   385|  // Main gradient text
+   386|  for (let i = 0; i <= 6; i++) {
+   387|    let t = i / 6;
+   388|    let r = lerp(255, 255, t);
+   389|    let g2 = lerp(70, 180, t);
+   390|    let b = lerp(100, 200, t);
+   391|    fill(r, g2, b, 255 - i * 12);
+   392|    textSize(72 - i * 2);
+   393|    textAlign(CENTER, CENTER);
+   394|    textStyle(BOLD);
+   395|    text('520', cx, cy);
+   396|  }
+   397|
+   398|  // Subtitle
+   399|  fill(255, 180, 200, 200);
+   400|  textSize(16);
+   401|  textStyle(NORMAL);
+   402|  textAlign(CENTER, CENTER);
+   403|  text('—— 我爱你 💕', cx, cy + 50);
+   404|
+   405|  // Decorative orbiting hearts
+   406|  let decorAngle = frameCount * 0.02;
+   407|  for (let i = 0; i < 5; i++) {
+   408|    let a = decorAngle + i * TWO_PI / 5;
+   409|    let dx = cos(a) * 70;
+   410|    let dy = sin(a) * 50 - 5;
+   411|    let sc = 3 + sin(a * 2) * 1.5;
+   412|    drawHeart(cx + dx, cy + dy, sc, [255, 80 + i * 30, 120 + i * 20], 150, a * 0.5, a);
+   413|  }
+   414|}
+   415|
+   416|// ============================================================
+   417|//  TYPEWRITER EFFECT
+   418|// ============================================================
+   419|function updateTypewriter() {
+   420|  if (typeIndex < loveMessage.length) {
+   421|    if (frameCount % 3 === 0 || loveMessage[typeIndex] === '\n') {
+   422|      displayText += loveMessage[typeIndex];
+   423|      typeIndex++;
+   424|      document.getElementById('love-text').innerHTML =
+   425|        displayText.replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+   426|    }
+   427|  } else {
+   428|    let el = document.getElementById('love-text');
+   429|    if (!el.innerHTML.endsWith('</span>')) {
+   430|      el.innerHTML = displayText.replace(/\n/g, '<br>') + '<span class="cursor"></span>';
+   431|    }
+   432|  }
+   433|}
+   434|
+   435|// ============================================================
+   436|//  EVENTS
+   437|// ============================================================
+   438|function mousePressed() {
+   439|  burstAt(mouseX, mouseY);
+   440|  return false;
+   441|}
+   442|
+   443|function touchStarted() {
+   444|  if (touches.length > 0) {
+   445|    burstAt(touches[0].x, touches[0].y);
+   446|  }
+   447|  return false;
+   448|}
+   449|
+   450|function windowResized() {
+   451|  resizeCanvas(min(windowWidth, 480), windowHeight);
+   452|}
+   453|</script>
+   454|</body>
+   455|</html>
+   456|
