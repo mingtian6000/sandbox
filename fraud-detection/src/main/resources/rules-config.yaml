@@ -1,0 +1,73 @@
+# ============================================================
+# Fraud Detection Rules Configuration
+# Each rule is a Janino expression evaluated against feature variables
+# ============================================================
+# Available variables:
+#   amount          (double)   - Transaction amount
+#   txCount24h      (int)      - Number of transactions in last 24h
+#   avgAmount24h    (double)   - Average transaction amount in 24h
+#   geoVelocity     (double)   - Geographic velocity score
+#   deviceRiskScore (double)   - Device fingerprint risk (0-1)
+#   ipReputation    (double)   - IP reputation score (0-1, higher = better)
+#   timeAnomaly     (double)   - Time anomaly score (0-1)
+#   amountZscore    (double)   - Amount Z-score
+#   merchantDiversity (int)    - Number of unique merchants
+#   nightTxRatio    (double)   - Ratio of night transactions
+# ============================================================
+
+rules:
+  # Rule 001: Large amount + cross-region travel
+  - ruleId: "RULE_001"
+    name: "大额+异地"
+    expression: "amount > 10000 && geoVelocity > 500"
+    weight: 0.8
+    score: 30
+    enabled: true
+
+  # Rule 002: High frequency + suspicious device
+  - ruleId: "RULE_002"
+    name: "24h频次异常"
+    expression: "txCount24h > 10 && deviceRiskScore > 0.6"
+    weight: 0.6
+    score: 25
+    enabled: true
+
+  # Rule 003: Night time + new device
+  - ruleId: "RULE_003"
+    name: "深夜+新设备"
+    expression: "nightTxRatio > 0.3 && deviceRiskScore > 0.5"
+    weight: 0.5
+    score: 20
+    enabled: true
+
+  # Rule 004: Extreme amount anomaly
+  - ruleId: "RULE_004"
+    name: "金额极端异常"
+    expression: "amountZscore > 3.0"
+    weight: 0.7
+    score: 35
+    enabled: true
+
+  # Rule 005: Low IP reputation + significant amount
+  - ruleId: "RULE_005"
+    name: "IP信誉低"
+    expression: "ipReputation < 0.3 && amount > 5000"
+    weight: 0.5
+    score: 20
+    enabled: true
+
+  # Rule 006: High device risk + velocity
+  - ruleId: "RULE_006"
+    name: "高风险设备+高频"
+    expression: "deviceRiskScore > 0.7 && txCount24h > 5"
+    weight: 0.7
+    score: 30
+    enabled: true
+
+  # Rule 007: Small merchant diversity + high amount
+  - ruleId: "RULE_007"
+    name: "商户单一+大额"
+    expression: "merchantDiversity < 3 && amount > 20000"
+    weight: 0.6
+    score: 25
+    enabled: true
