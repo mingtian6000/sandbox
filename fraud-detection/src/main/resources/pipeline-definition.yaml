@@ -1,0 +1,73 @@
+# ============================================================
+# Pipeline Definition — DAG Orchestration
+# Defines the order and parallelism of pipeline stages.
+# ============================================================
+
+pipeline:
+  name: "fraud_scoring_v2"
+  version: "1.0.0"
+
+  stages:
+    # Stage 1: Load raw data from Redis + metrics from Cassandra
+    - id: "data_loader"
+      type: "DATA_LOADER"
+      description: "Load recent transactions (Redis) and aggregated metrics (Cassandra)"
+      next: ["scanners", "rules", "model"]
+      timeout_ms: 100
+      fallback: "use_defaults"
+
+    # Stage 2: Run scanners in parallel
+    - id: "scanners"
+      type: "SCANNER_GROUP"
+      description: "Run all registered scanners in parallel"
+      parallel: true
+      scanners:
+        - "device_fingerprint"
+        - "geo_location"
+        - "behavior_pattern"
+      next: ["feature_merger"]
+      timeout_ms: 300
+      fallback: "continue_empty"
+
+    # Stage 3: Evaluate rules in parallel with scanners
+    - id: "rules"
+      type: "RULES_ENGINE"
+      description: "Evaluate Janino dynamic rules"
+      rule_groups:
+        - "amount_rules"
+        - "frequency_rules"
+        - "geo_rules"
+        - "device_rules"
+      next: ["feature_merger"]
+      timeout_ms: 200
+      fallback: "continue_empty"
+
+    # Stage 4: ONNX model inference in parallel with scanners and rules
+    - id: "model"
+      type: "ONNX_MODEL"
+      description: "Run LightGBM-style model inference via ONNX Runtime"
+      model_path: "/models/fraud_model.onnx"
+      batch_size: 1
+      next: ["feature_merger"]
+      timeout_ms: 200
+      fallback: "heuristic_scoring"
+
+    # Stage 5: Merge all scores using Janino expression
+    - id: "feature_merger"
+      type: "FEATURE_MERGER"
+      description: "Combine model, rules, and scanner scores into final score"
+      janino_expr: "finalScore = modelScore * 0.5 + rulesScore * 0.3 + scannerScore * 0.2"
+      next: ["decision"]
+      timeout_ms: 50
+      fallback: "equal_weight"
+
+    # Stage 6: Make final decision
+    - id: "decision"
+      type: "DECISION_MAKER"
+      description: "Apply thresholds to determine Approve/Reject/Pending"
+      thresholds:
+        approve: 30
+        reject: 60
+      next: []
+      timeout_ms: 10
+      fallback: "pend"
