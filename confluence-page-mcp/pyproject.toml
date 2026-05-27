@@ -1,0 +1,18 @@
+[project]
+name = "confluence-page-mcp"
+version = "0.1.0"
+description = "MCP server for Confluence Data Center page management"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=0.4.0",
+    "requests>=2.31.0",
+    "markdown>=3.5.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+confluence-page-mcp = "confluence_page_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
