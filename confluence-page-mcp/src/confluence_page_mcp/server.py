@@ -11,6 +11,7 @@ Environment Variables (set in MCP client config):
 
 import json
 import os
+import re
 import sys
 from typing import Optional
 
@@ -28,6 +29,38 @@ def _make_response(success: bool, data: any = None, error: str = None) -> str:
     if error:
         result["error"] = error
     return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+def _resize_images_in_storage(content: str, target_width: int, target_height: int | None = None) -> str:
+    """Find all <ac:image ...> tags in Confluence storage format and set their dimensions.
+
+    Args:
+        content: Confluence storage format XHTML
+        target_width: New width in pixels
+        target_height: New height in pixels, or None for auto-proportional scaling
+
+    Returns:
+        Modified storage format XHTML with all ac:image dimensions set.
+    """
+    pattern = r"(<ac:image\b)((?:(?!>).)*?)(/?>)"
+
+    def _replace_img(match):
+        prefix = match.group(1)    # <ac:image
+        attrs_str = match.group(2)  # existing attributes
+        closing = match.group(3)    # > or />
+
+        # Remove existing ac:width and ac:height
+        attrs_str = re.sub(r'\s+ac:(?:width|height)\s*=\s*"[^"]*"', "", attrs_str)
+
+        # Append new dimensions
+        if target_height is not None:
+            attrs_str += f' ac:width="{target_width}" ac:height="{target_height}"'
+        else:
+            attrs_str += f' ac:width="{target_width}"'
+
+        return f"{prefix}{attrs_str}{closing}"
+
+    return re.sub(pattern, _replace_img, content)
 
 
 def _get_client() -> ConfluenceClient:
@@ -385,6 +418,79 @@ def get_labels(page_id: str) -> str:
         return _make_response(False, error=str(e))
 
 
+@mcp.tool(description="Resize all images on a Confluence page to a specified width and/or height.")
+def resize_page_images(
+    page_id: str,
+    size: str,
+) -> str:
+    """Set the width (and optionally height) of all <ac:image> elements on a page.
+
+    Args:
+        page_id: The numeric ID of the page to modify
+        size: Target size. Use a single number for fixed-width auto-height
+              (e.g. "800"), or "WIDTHxHEIGHT" for exact dimensions (e.g. "800x600").
+
+    Returns:
+        JSON with count of images resized and the new page version number.
+    """
+    try:
+        client = _get_client()
+
+        # Parse size parameter
+        size = size.strip().lower()
+        if "x" in size:
+            parts = size.split("x")
+            if len(parts) != 2:
+                return _make_response(
+                    False, error=f"Invalid size format: '{size}'. Use 'WIDTH' or 'WIDTHxHEIGHT'."
+                )
+            target_width = int(parts[0])
+            target_height = int(parts[1])
+        else:
+            target_width = int(size)
+            target_height = None  # auto-proportional scaling
+
+        # Fetch page content in storage format
+        page = client.get_page(page_id, expand="body.storage")
+        storage_content = page.get("body", {}).get("storage", {}).get("value", "")
+
+        if not storage_content:
+            return _make_response(False, error="Page has no storage content.")
+
+        # Count original images
+        original_image_count = len(re.findall(r"<ac:image\b", storage_content))
+
+        # Resize images in the storage content
+        modified = _resize_images_in_storage(storage_content, target_width, target_height)
+
+        if modified == storage_content:
+            return _make_response(True, data={
+                "page_id": page_id,
+                "images_resized": 0,
+                "message": "No images found on this page.",
+            })
+
+        # Save back to Confluence
+        result = client.update_page(page_id, modified)
+        new_version = result.get("version", {}).get("number", "unknown")
+
+        size_desc = f"{target_width}x{target_height}" if target_height else f"{target_width} (auto-height)"
+        return _make_response(True, data={
+            "page_id": page_id,
+            "images_resized": original_image_count,
+            "new_version": new_version,
+            "size_applied": size_desc,
+            "message": f"Resized {original_image_count} image(s) on page to {size}.",
+        })
+    except ValueError:
+        return _make_response(
+            False,
+            error=f"Invalid size format: '{size}'. Use a number (e.g. '800') or 'WIDTHxHEIGHT' (e.g. '800x600').",
+        )
+    except Exception as e:
+        return _make_response(False, error=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
@@ -407,7 +513,7 @@ def main():
 
 def _escape_cql(text: str) -> str:
     """Escape special characters inside a CQL quoted string."""
-    return text.replace('\\', '\\\\').replace('"', '\\"')
+    return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
 if __name__ == "__main__":
